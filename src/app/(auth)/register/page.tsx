@@ -3,13 +3,15 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useSession, signIn } from 'next-auth/react'; // 💡 signIn ইম্পোর্ট করা হয়েছে অটো-লগইনের জন্য
+import { getSession, signIn } from 'next-auth/react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Eye, EyeOff, Zap, Loader2, Check } from 'lucide-react';
+import { GoogleSignInButton } from '@/components/auth/GoogleSignInButton';
 import { useAuthStore } from '@/store/authStore';
 import { useToast } from '@/hooks/use-toast';
+import { getPostAuthPath } from '@/lib/session-redirect';
 
 const schema = z.object({
   name: z.string().min(2, 'Name must be at least 2 characters'),
@@ -25,20 +27,18 @@ export default function RegisterPage() {
   const { register: registerUser, isLoading: isAuthStoreLoading } = useAuthStore();
   const [isSigningIn, setIsSigningIn] = useState(false); // 💡 অটো লগইন ট্র্যাকিং স্টেট
   const router = useRouter();
-  const { data: session, status } = useSession();
   const { toast } = useToast();
+
+  useEffect(() => {
+    getSession().then((session) => {
+      const path = getPostAuthPath(session);
+      if (path) router.replace(path);
+    });
+  }, [router]);
 
   const { register, handleSubmit, formState: { errors } } = useForm<FormData>({
     resolver: zodResolver(schema),
   });
-
-  useEffect(() => {
-    if (status !== 'authenticated' || !session?.user) {
-      return;
-    }
-    // সেশন অ্যাক্টিভ থাকলে রোল অনুযায়ী রিডাইরেক্ট
-    router.replace((session.user as any).role === 'ADMIN' ? '/admin/analytics' : '/dashboard');
-  }, [router, session, status]);
 
   const onSubmit = async (data: FormData) => {
     try {
@@ -95,6 +95,17 @@ export default function RegisterPage() {
             <span>• 10,000 words/month</span>
             <span>• 1 AI agent</span>
             <span>• Basic templates</span>
+          </div>
+        </div>
+
+        <GoogleSignInButton callbackUrl="/dashboard" className="mb-4" />
+
+        <div className="relative mb-6">
+          <div className="absolute inset-0 flex items-center">
+            <div className="w-full border-t border-border" />
+          </div>
+          <div className="relative flex justify-center text-xs text-muted-foreground">
+            <span className="bg-background px-3">or create account with email</span>
           </div>
         </div>
 

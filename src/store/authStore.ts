@@ -81,15 +81,15 @@ const toAppUser = (session: Session | null): AppUser | null => {
 
   return {
     _id: sessionUser.id || sessionUser._id || sessionUser.email || '',
-    name: user.name || user.email.split('@')[0],
-    email: user.email,
+    name: user.name || user.email?.split('@')[0] || 'User',
+    email: user.email || '',
     role: user.role || 'USER',
-    plan: user.plan || 'FREE',
-    status: user.status || 'ACTIVE',
-    avatar: user.avatar,
+    plan: (user.plan as AppUser['plan']) || 'FREE',
+    status: 'ACTIVE' as const,
+    avatar: user.avatar || user.image || undefined,
     bio: user.bio,
-    createdAt: user.createdAt || new Date().toISOString(),
-    updatedAt: user.updatedAt || new Date().toISOString(),
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
   };
 };
 
@@ -105,7 +105,7 @@ export const useAuthStore = create<AuthState>()(
 
       syncSession: (session: Session | null) => {
         const sessionUser = toAppUser(session);
-        const apiToken = (session?.user as { token?: string })?.token || null;
+        const apiToken = session?.user?.token || null;
 
         if (!sessionUser) {
           syncStorage(null, null, true);
@@ -143,12 +143,12 @@ export const useAuthStore = create<AuthState>()(
 
         const resolvedToken = apiToken || cachedToken || get().accessToken;
 
-        syncStorage(session?.accessToken, session?.refreshToken);
+        syncStorage(resolvedToken, null);
         syncApiToken(resolvedToken, user);
         set({
           user,
-          accessToken: resolvedToken || session?.accessToken || null,
-          refreshToken: session?.refreshToken || null,
+          accessToken: resolvedToken,
+          refreshToken: null,
           isAuthenticated: true,
           isLoading: false,
         });
@@ -176,15 +176,15 @@ export const useAuthStore = create<AuthState>()(
           const session = await getSession();
           const user = toAppUser(session);
           const apiToken =
-            (session?.user as { token?: string })?.token ||
+            session?.user?.token ||
             (typeof window !== 'undefined' ? localStorage.getItem('writeflow_token') : null);
 
-          syncStorage(session?.accessToken, session?.refreshToken);
+          syncStorage(apiToken, null);
           syncApiToken(apiToken, user);
           set({
             user,
-            accessToken: session?.accessToken || null,
-            refreshToken: session?.refreshToken || null,
+            accessToken: apiToken,
+            refreshToken: null,
             isAuthenticated: !!user,
             isLoading: false,
           });
@@ -214,15 +214,15 @@ export const useAuthStore = create<AuthState>()(
           const session = await getSession();
           const user = toAppUser(session);
           const apiToken =
-            (session?.user as { token?: string })?.token ||
+            session?.user?.token ||
             (typeof window !== 'undefined' ? localStorage.getItem('writeflow_token') : null);
 
-          syncStorage(session?.accessToken, session?.refreshToken);
+          syncStorage(apiToken, null);
           syncApiToken(apiToken, user);
           set({
             user,
-            accessToken: apiToken || session?.accessToken || null,
-            refreshToken: session?.refreshToken || null,
+            accessToken: apiToken,
+            refreshToken: null,
             isAuthenticated: !!user,
             isLoading: false,
           });

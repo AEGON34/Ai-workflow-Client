@@ -1,15 +1,17 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
-import { getSession, signIn, useSession } from 'next-auth/react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { getSession } from 'next-auth/react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Chrome, Eye, EyeOff, Zap, Loader2 } from 'lucide-react';
+import { Eye, EyeOff, Zap, Loader2 } from 'lucide-react';
+import { GoogleSignInButton, getGoogleOAuthErrorMessage } from '@/components/auth/GoogleSignInButton';
 import { useAuthStore } from '@/store/authStore';
 import { useToast } from '@/hooks/use-toast';
+import { getPostAuthPath } from '@/lib/session-redirect';
 
 const schema = z.object({
   email: z.string().email('Please enter a valid email'),
@@ -19,24 +21,43 @@ const schema = z.object({
 type FormData = z.infer<typeof schema>;
 
 export default function LoginPage() {
+  const router = useRouter();
+
+  useEffect(() => {
+    getSession().then((session) => {
+      const path = getPostAuthPath(session);
+      if (path) router.replace(path);
+    });
+  }, [router]);
+
+  return (
+    <Suspense fallback={<LoginPageFallback />}>
+      <LoginPageForm />
+    </Suspense>
+  );
+}
+
+function LoginPageFallback() {
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-background">
+      <Loader2 className="h-8 w-8 animate-spin text-brand-500" />
+    </div>
+  );
+}
+
+function LoginPageForm() {
   const [showPass, setShowPass] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const { login, isLoading } = useAuthStore();
   const router = useRouter();
-  const { data: session, status } = useSession();
+  const searchParams = useSearchParams();
   const { toast } = useToast();
+
+  const oauthErrorMessage = getGoogleOAuthErrorMessage(searchParams.get('error'));
 
   const { register, handleSubmit, setValue, formState: { errors } } = useForm<FormData>({
     resolver: zodResolver(schema),
   });
-
-  useEffect(() => {
-    if (status !== 'authenticated' || !session?.user) {
-      return;
-    }
-
-    router.replace((session.user as any).role === 'ADMIN' ? '/admin/analytics' : '/dashboard');
-  }, [router, session, status]);
 
   const onSubmit = async (data: FormData) => {
     setSubmitting(true);
@@ -48,10 +69,10 @@ export default function LoginPage() {
       }
 
       const nextSession = await getSession();
-      const role = (nextSession?.user as { role?: string })?.role ?? user.role;
+      const path = getPostAuthPath(nextSession) ?? '/dashboard';
 
       toast({ title: 'Welcome back!', description: 'Login successful.' });
-      router.replace(role === 'ADMIN' ? '/admin/analytics' : '/dashboard');
+      router.replace(path);
     } catch (err: unknown) {
       const raw = err instanceof Error ? err.message : '';
       const message =
@@ -74,7 +95,6 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen flex">
-      {/* Left Panel */}
       <div className="hidden lg:flex lg:w-1/2 animated-gradient flex-col items-center justify-center p-12 relative">
         <div className="absolute inset-0 opacity-10" style={{ backgroundImage: 'linear-gradient(rgba(255,255,255,0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.1) 1px, transparent 1px)', backgroundSize: '40px 40px' }} />
         <div className="relative z-10 text-center text-white">
@@ -96,7 +116,6 @@ export default function LoginPage() {
         </div>
       </div>
 
-      {/* Right Panel */}
       <div className="w-full lg:w-1/2 flex items-center justify-center p-6 bg-background">
         <div className="w-full max-w-md">
           <div className="mb-8">
@@ -110,16 +129,21 @@ export default function LoginPage() {
             <p className="text-muted-foreground">Sign in to your account to continue writing.</p>
           </div>
 
-          <button
-            type="button"
-            onClick={() => void signIn('google', { callbackUrl: '/dashboard' })}
-            className="w-full mb-4 py-3 bg-white text-slate-900 font-semibold rounded-xl transition-colors hover:bg-slate-100 flex items-center justify-center gap-2 shadow-sm"
-          >
-            <Chrome className="w-4 h-4" />
-            Continue with Google
-          </button>
+          <GoogleSignInButton callbackUrl="/dashboard" className="mb-4" externalError={oauthErrorMessage} />
 
-          {/* Demo Buttons */}
+          {process.env.NODE_ENV === 'development' && (
+            <p className="mb-4 rounded-lg border border-border/60 bg-muted/40 px-3 py-2 text-[11px] leading-relaxed text-muted-foreground">
+              <span className="font-medium text-foreground">Dev:</span> In Google Cloud Console → Credentials →
+              Authorized redirect URIs, add exactly:{' '}
+              <code className="text-brand-500">
+                {typeof window !== 'undefined'
+                  ? `${window.location.origin}/api/auth/callback/google`
+                  : '{NEXTAUTH_URL}/api/auth/callback/google'}
+              </code>
+              . Set <code className="text-brand-500">NEXTAUTH_URL</code> in `.env.local` to match your app URL.
+            </p>
+          )}
+
           <div className="flex gap-3 mb-6">
             <button
               type="button"
